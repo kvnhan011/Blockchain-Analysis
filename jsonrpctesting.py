@@ -240,7 +240,7 @@ def updateParsedEthereumChain(client):
     db = initMongo(client)
     highestEthblock = highestBlockEth()
     highestMongoblock = highestBlockMongo(db)
-    for number in tqdm.tqdm(range(highestMongoblock, highestEthbloc+1)):
+    for number in tqdm.tqdm(range(highestMongoblock, highestEthblock+1)):
         add_block(db, number)
     print("Done! Highest block is now {}".format(highestBlockMongo(db)))
 
