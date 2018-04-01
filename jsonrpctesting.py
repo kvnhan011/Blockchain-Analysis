@@ -1,6 +1,6 @@
 import time
 import json
-import requests
+from web3 import Web3, HTTPProvider, IPCProvider
 import pymongo
 import os
 import pdb
@@ -8,23 +8,12 @@ import tqdm
 
 
 DB_NAME = "Ethereum_Blockchain"
-COLLECTION = "Transactions"
+COLLECTION = "Transactions_1"
 
-def _rpcRequest(method, params, url='http://localhost:8545', 
-                headers={'Content-type': 'application/json'}, key='result', delay = .0001, callid=0):
-    """Make an RPC request to geth on port 8545."""
-    payload = {
-        "method": method,
-        "params": params,
-        "jsonrpc": "2.0",
-        "id": callid
-    }
-    time.sleep(delay)
-    res = requests.post(
-          url,
-          data=json.dumps(payload),
-          headers=headers).json()
-    return res[key]
+def _ipcRequest():
+    """Initialize Web3 client."""
+    return Web3(IPCProvider())
+
 
 # Geth
 # ----
@@ -75,21 +64,20 @@ def decodeBlock(block):
     """
     try:
         b = block
-        if "result" in block:
-            b = block["result"]
         # Filter the block
         new_block = {
-            "number": int(b["number"], 16),
-            "timestamp": int(b["timestamp"], 16),		# Timestamp is in unix time
+            "number": b["number"],
+            "timestamp": b["timestamp"],		# Timestamp is in unix time
             "transactions": []
         }
         # Filter and decode each transaction and add it back
         # 	Value, gas, and gasPrice are all converted to ether
-        for t in b["transactions"]:
+        for transaction in b["transactions"]:
+            t = web3.eth.getTransaction(transaction)
             new_t = {
                 "from": t["from"],
                 "to": t["to"],
-                "value": float(int(t["value"], 16))/1000000000000000000.,
+                "value": t["value"],
                 "data": t["input"]
             }
             new_block["transactions"].append(new_t)
@@ -100,46 +88,11 @@ def decodeBlock(block):
     
 def getBlock(n):
     """Get a specific block from the blockchain and filter the data."""
-    data = _rpcRequest("eth_getBlockByNumber", [hex(n), True])
-    block = decodeBlock(data)
-    return block
+    web3 = _ipcRequest()
+    block = web3.eth.getBlock(n)
+    decodedblock = decodeBlock(block)
+    return decodedblock
 
-# mongodb
-# -------
-def initMongo(client):
-    """
-    Given a mongo client instance, create db/collection if either doesn't exist
-
-    Parameters:
-    -----------
-    client <mongodb Client>
-
-    Returns:
-    --------
-    <mongodb Client>
-    """
-    db = client[DB_NAME]
-    try:
-        db.create_collection(COLLECTION)
-    except:
-        pass
-    try:
-        # Index the block number so duplicate records cannot be made
-        db[COLLECTION].create_index(
-			[("number", pymongo.DESCENDING)],
-			unique=True
-		)
-    except:
-        pass
-
-    return db[COLLECTION]
-
-from collections import deque
-import pdb
-
-
-DB_NAME = "Ethereum_Blockchain"
-COLLECTION = "Transactions"
 
 # mongodb
 # -------
@@ -191,10 +144,10 @@ def insertMongo(client, d):
         pass
     
 def saveBlock(client, block):
-        """Insert a given parsed block into mongo."""
-        e = insertMongo(client, block)
-        if e:
-            client.insertion_errors.append(e)
+    """Insert a given parsed block into mongo."""
+    e = insertMongo(client, block)
+    if e:
+        client.insertion_errors.append(e)
             
             
 def highestBlock(client):
@@ -226,21 +179,26 @@ def add_block(client, n):
     b = getBlock(n)
     if b:
         saveBlock(client, b)
-        time.sleep(0.001)
+        time.sleep(0.0001)
     else:
         saveBlock(client, {"number": n, "transactions": []})
 
 def highestBlockEth():
     """Find the highest numbered block in geth."""
-    block = _rpcRequest("eth_syncing", [])
-    return int(block['currentBlock'],16)
+    staticBlockLimit = 5300000
+    web3 = _ipcRequest()
+    blockinfo = web3.eth.syncing
+    if blockinfo:
+        return blockinfo['currentBlock']
+    else:
+        return staticBlockLimit
 
 def updateParsedEthereumChain(client):
     """Initiate with MongoClient"""
     db = initMongo(client)
     highestEthblock = highestBlockEth()
     highestMongoblock = highestBlockMongo(db)
-    for number in tqdm.tqdm(range(highestMongoblock, highestEthblock+1)):
+    for number in tqdm.tqdm(range(2777382, 5300000)):
         add_block(db, number)
     print("Done! Highest block is now {}".format(highestBlockMongo(db)))
 
