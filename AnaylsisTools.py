@@ -64,3 +64,33 @@ def MongoSliceandProcess(startdate, enddate):
     frame = pd.DataFrame(docprocessed, columns = headers)
     return frame
 
+
+-------------------------------
+#Pandas script
+%matplotlib inline
+
+import matplotlib
+import matplotlib.pyplot as plt
+import os
+import pandas as pd
+
+def transactioncount(frame, counttokens = False):
+    if not counttokens:
+        frame = frame[frame['value'] != 0]
+    fromlistcounts = frame['from'].value_counts().reset_index()
+    tolistcounts = frame['to'].value_counts().reset_index()
+    combined = pd.merge(fromlistcounts, tolistcounts, on=['index'], how = 'outer', suffixes = ['_x','_y']).fillna(0)
+    combined['sum'] = combined['0_x'] + combined['0_y']
+    return combined
+
+def topPercentile(frame, percentile):
+    #percentile as whole number (e.g. 95 = 95th percentile)
+    newframe = frame[frame['sum'] < np.percentile(frame['sum'],percentile)]
+    return newframe
+
+
+
+
+   
+
+
