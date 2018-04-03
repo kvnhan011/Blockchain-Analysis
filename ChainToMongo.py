@@ -5,7 +5,7 @@ import pymongo
 import os
 import pdb
 import tqdm
-
+import web3
 
 DB_NAME = "Ethereum_Blockchain"
 COLLECTION = "Transactions_1"
@@ -138,7 +138,7 @@ def insertMongo(client, d):
     error <None or str>
     """
     try:
-        client.insert_one(d)
+        client.insert_many(d)
         return None
     except Exception as err:
         pass
@@ -174,9 +174,8 @@ def highestBlockMongo(client):
     highest_block = highestBlock(client)
     return highest_block
 
-def add_block(client, n):
-    """Add a block to mongo."""
-    b = getBlock(n)
+def add_block(client, b):
+    """Add a set of blocks to mongo."""
     if b:
         saveBlock(client, b)
         time.sleep(0.0001)
@@ -198,8 +197,13 @@ def updateParsedEthereumChain(client):
     db = initMongo(client)
     highestEthblock = highestBlockEth()
     highestMongoblock = highestBlockMongo(db)
+    blocklist = []
     for number in tqdm.tqdm(range(2777382, 5300000)):
-        add_block(db, number)
+        b = getBlock(number)
+	blocklist.append(b)
+	if len(blocklist)==100:
+	    add_block(db, blocklist)
+	    blocklist = []
     print("Done! Highest block is now {}".format(highestBlockMongo(db)))
 
 #Add this to bottom to run: updateParsedEthereumChain(pymongo.MongoClient())
